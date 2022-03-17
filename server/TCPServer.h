@@ -40,5 +40,6 @@ public:
                          char *addrStr, int addrStrLen);
 
 
+    void _serveForever();
 };
 #endif //ASSIGNMENT3_TCPSERVER_H

@@ -76,13 +76,17 @@ void TCPServer::_listenAndAccept() {
 
     FD_SET(this->sockfd, &(this->masterfds));
 
+    _serveForever();
+}
+
+void TCPServer::_serveForever() {
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "EndlessLoop"
     for(;;){
         fd_set readfds = this->masterfds;
         if(select(FD_SETSIZE, &readfds, nullptr, nullptr, nullptr) < 0){
             int errsv = errno;
-            fprintf(stderr,"[E|-Select Syscall-%s-%d] %s\n", __func__, errsv, std::strerror(errsv));
+            fprintf(stderr,"[E|-Select Syscall-%s-%d] %s\n", __func__, errsv, strerror(errsv));
         }
 
         for(int i=0; i<FD_SETSIZE; i++){
@@ -93,7 +97,7 @@ void TCPServer::_listenAndAccept() {
                     int commSock = _acceptClientWrapper(clientAddress);
                     if(commSock == -1){
                         int errsv = errno;
-                        fprintf(stderr,"[E|-Client Not Connected-%s-%d] %s\n", __func__, errsv, std::strerror(errsv));
+                        fprintf(stderr,"[E|-Client Not Connected-%s-%d] %s\n", __func__, errsv, strerror(errsv));
                     }
                     postConnectRoutine(commSock, clientAddress);
                 }else{
