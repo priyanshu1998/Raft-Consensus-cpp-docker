@@ -10,17 +10,16 @@
 
 class TCPServer{
 protected:
-    char name[128]{};
     int sockfd = -1;
-private:
     fd_set masterfds{};
 
+    virtual void postConnectRoutine(int commSock,const struct sockaddr_in &clientAddress);
+    virtual void preCloseRoutine(int commSock);
+private:
     void _createAndBind(const char *hostname, const char *port) ;
     void _listenAndAccept();
     static int _handleRequest(int clientSock) ;
     int _acceptClientWrapper(struct sockaddr_in &clientAddress) const;
-    void postConnectRoutine(int commSock,const struct sockaddr_in &clientAddress);
-    void preCloseRoutine(int commSock);
 
 public:
     TCPServer(const char *hostname, const char *port) {
@@ -41,5 +40,7 @@ public:
 
 
     void _serveForever();
+
+    virtual bool descriptorEvents(fd_set &readfds, int i);
 };
 #endif //ASSIGNMENT3_TCPSERVER_H

@@ -90,20 +90,15 @@ void TCPServer::_serveForever() {
         }
 
         for(int i=0; i<FD_SETSIZE; i++){
-            if(FD_ISSET(i, &readfds)){
-                if(i == this->sockfd){
-                    // sockfd has data.
-                    struct sockaddr_in clientAddress{};
-                    int commSock = _acceptClientWrapper(clientAddress);
-                    if(commSock == -1){
-                        int errsv = errno;
-                        fprintf(stderr,"[E|-Client Not Connected-%s-%d] %s\n", __func__, errsv, strerror(errsv));
-                    }
-                    postConnectRoutine(commSock, clientAddress);
-                }else{
+            if(FD_ISSET(i, &(this->masterfds))) {
+                bool isHandled = descriptorEvents(readfds, i);
+
+                if(!isHandled) {
+                    fprintf(stderr, "[W] Invoking default handler\n");
+
                     // one of the socket associated with client has data.
                     int stat = _handleRequest(i);
-                    if(stat != 0){
+                    if (stat != 0) {
                         preCloseRoutine(i);
                         close(i);
                     }
@@ -112,6 +107,23 @@ void TCPServer::_serveForever() {
         }
     }
 #pragma clang diagnostic pop
+}
+
+bool TCPServer::descriptorEvents(fd_set &readfds, int i) {
+    if(FD_ISSET(i, &readfds)){
+        if(i == sockfd){
+            // New connection request
+            struct sockaddr_in clientAddress{};
+            int commSock = _acceptClientWrapper(clientAddress);
+            if(commSock == -1){
+                int errsv = errno;
+                fprintf(stderr,"[E|-Client Not Connected-%s-%d] %s\n", __func__, errsv, strerror(errsv));
+            }
+            postConnectRoutine(commSock, clientAddress);
+            return true;
+        }
+    }
+    return false;
 }
 
 int TCPServer::_acceptClientWrapper(struct sockaddr_in &clientAddress) const {
@@ -169,9 +181,6 @@ int TCPServer::_handleRequest(int clientSock) {
 }
 
 void TCPServer::postConnectRoutine(int commSock, const struct sockaddr_in &clientAddr) {
-    std::string msg = "connected to "+std::string(this->name);
-    send(commSock, msg.c_str(), msg.length(), 0);
-    
     FD_SET(commSock, &(this->masterfds));
 }
 
