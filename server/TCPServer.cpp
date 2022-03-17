@@ -74,12 +74,12 @@ void TCPServer::_listenAndAccept() {
     }
     fprintf(stderr,"[I|-Socket in LISTENING state-] can accept new connections.\n"),
 
-    FD_SET(this->sockfd, &(this->currentSockets));
+    FD_SET(this->sockfd, &(this->masterfds));
 
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "EndlessLoop"
     for(;;){
-        fd_set  readfds = this->currentSockets;
+        fd_set readfds = this->masterfds;
         if(select(FD_SETSIZE, &readfds, nullptr, nullptr, nullptr) < 0){
             int errsv = errno;
             fprintf(stderr,"[E|-Select Syscall-%s-%d] %s\n", __func__, errsv, std::strerror(errsv));
@@ -168,7 +168,7 @@ void TCPServer::postConnectRoutine(int commSock, const struct sockaddr_in &clien
     std::string msg = "connected to "+std::string(this->name);
     send(commSock, msg.c_str(), msg.length(), 0);
     
-    FD_SET(commSock, &(this->currentSockets));
+    FD_SET(commSock, &(this->masterfds));
 }
 
 void TCPServer::preCloseRoutine(int commSock) {
@@ -191,6 +191,6 @@ void TCPServer::preCloseRoutine(int commSock) {
         fprintf(stderr, "[I| Client %s teminated.\n", inetAddressStr( (struct sockaddr*)&addrinfo, addrsize, terminatingClient, 1024));
     }
 
-    FD_CLR(commSock, &(this->currentSockets));
+    FD_CLR(commSock, &(this->masterfds));
 }
 

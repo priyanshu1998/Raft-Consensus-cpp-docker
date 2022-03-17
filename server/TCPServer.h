@@ -13,7 +13,7 @@ protected:
     char name[128]{};
     int sockfd = -1;
 private:
-    fd_set currentSockets{};
+    fd_set masterfds{};
 
     void _createAndBind(const char *hostname, const char *port) ;
     void _listenAndAccept();
@@ -25,12 +25,12 @@ private:
 public:
     TCPServer(const char *hostname, const char *port) {
         _createAndBind(hostname, port);
-        FD_ZERO(&(this->currentSockets));
+        FD_ZERO(&(this->masterfds));
     }
 
     explicit TCPServer(const char* port){
         _createAndBind(nullptr, port);
-        FD_ZERO(&(this->currentSockets));
+        FD_ZERO(&(this->masterfds));
 
     }
 
