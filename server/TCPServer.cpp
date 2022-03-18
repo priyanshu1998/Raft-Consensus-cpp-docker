@@ -93,7 +93,7 @@ void TCPServer::_serveForever() {
         eventQueue.pop();
 
         if(FD_ISSET(i, &readfds)){
-            bool isHandled = descriptorEvents(readfds);
+            bool isHandled = descriptorEvents(readfds, i);
 
             if(!isHandled) {
                 fprintf(stderr, "[W] Invoking default handler\n");

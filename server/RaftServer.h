@@ -80,7 +80,7 @@ public:
          eventQueue.push(this->tryConnectPipe[0]);
     }
 
-    bool descriptorEvents(fd_set &readfds) override;
+    bool descriptorEvents(fd_set &readfds, int i) override;
     bool tryConnecting(char *host);
     void lazyConnect(char *host);
 

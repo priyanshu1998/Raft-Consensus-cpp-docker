@@ -35,9 +35,9 @@ void RaftServer::preCloseRoutine(int commSock){
     TCPServer::preCloseRoutine(commSock);
 }
 
-bool RaftServer::descriptorEvents(fd_set &readfds) {
+bool RaftServer::descriptorEvents(fd_set &readfds, int i) {
     // New host/IP to connect
-    if (FD_ISSET(this->tryConnectPipe[0], &readfds)) {
+    if (i == this->tryConnectPipe[0]) {
         char IP[1024]{};
         ServerUtils::readIP(this->tryConnectPipe[0], IP);
         bool isConnectionSuccessful = tryConnecting(IP);
