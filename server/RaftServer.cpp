@@ -67,6 +67,10 @@ bool RaftServer::tryConnecting(char *host) {
         return false;
     }
 
+    while(result != nullptr && result->ai_family != AF_INET){
+        result = result->ai_next;
+    }
+
     char address[ADDRSTRLEN]{};
     printf("[I| Will try to connect to %s]\n", inetAddressStr(result->ai_addr, result->ai_addrlen,
                                         address, ADDRSTRLEN));

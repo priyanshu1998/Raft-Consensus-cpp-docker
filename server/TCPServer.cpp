@@ -40,6 +40,14 @@ void TCPServer::_createAndBind(const char *hostname, const char* port) {
         if (s != 0) {
             fprintf(stderr,"[E|-Socket Creation-%s-%d] %s\n", __func__, s, gai_strerror(s));
         }
+        // /*******************************************
+        //Only use IPv4 address type
+
+        while (bind_address != nullptr && bind_address->ai_family != AF_INET){
+            bind_address = bind_address->ai_next;
+        }
+        // ********************************************/
+
 //        fprintf(stderr,"Creating socket...\n");
         this->sockfd = socket(bind_address->ai_family,
                               bind_address->ai_socktype, bind_address->ai_protocol);
