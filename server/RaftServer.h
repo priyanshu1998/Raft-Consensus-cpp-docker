@@ -77,6 +77,7 @@ public:
          }
 
          FD_SET(this->tryConnectPipe[0], &(this->masterfds));
+         eventQueue.push(this->tryConnectPipe[0]);
     }
 
     bool descriptorEvents(fd_set &readfds) override;

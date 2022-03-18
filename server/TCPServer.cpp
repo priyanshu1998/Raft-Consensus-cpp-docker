@@ -89,39 +89,47 @@ void TCPServer::_serveForever() {
             fprintf(stderr,"[E|-Select Syscall-%s-%d] %s\n", __func__, errsv, strerror(errsv));
         }
 
-        for(int i=0; i<FD_SETSIZE; i++){
-            if(FD_ISSET(i, &(this->masterfds))) {
-                bool isHandled = descriptorEvents(readfds, i);
+        int i = eventQueue.front();
+        eventQueue.pop();
 
-                if(!isHandled) {
-                    fprintf(stderr, "[W] Invoking default handler\n");
+        if(FD_ISSET(i, &readfds)){
+            bool isHandled = descriptorEvents(readfds);
 
-                    // one of the socket associated with client has data.
-                    int stat = _handleRequest(i);
-                    if (stat != 0) {
-                        preCloseRoutine(i);
-                        close(i);
-                    }
+            if(!isHandled) {
+                fprintf(stderr, "[W] Invoking default handler\n");
+
+                // one of the socket associated with client has data.
+                int stat = _handleRequest(i);
+                if (stat != 0) {
+                    preCloseRoutine(i);
+                    close(i);
+                }else{
+                    eventQueue.push(i);
                 }
             }
+        }else{
+            eventQueue.push(i);
         }
     }
 #pragma clang diagnostic pop
 }
 
-bool TCPServer::descriptorEvents(fd_set &readfds, int i) {
-    if(FD_ISSET(i, &readfds)){
-        if(i == sockfd){
-            // New connection request
-            struct sockaddr_in clientAddress{};
-            int commSock = _acceptClientWrapper(clientAddress);
-            if(commSock == -1){
-                int errsv = errno;
-                fprintf(stderr,"[E|-Client Not Connected-%s-%d] %s\n", __func__, errsv, strerror(errsv));
-            }
-            postConnectRoutine(commSock, clientAddress);
-            return true;
+bool TCPServer::descriptorEvents(fd_set &readfds) {
+    if(FD_ISSET(this->sockfd, &readfds)){
+        // New connection request
+        fprintf(stderr,"[I] New client connected.\n");
+        struct sockaddr_in clientAddress{};
+        int commSock = _acceptClientWrapper(clientAddress);
+        eventQueue.push(commSock);
+
+        if(commSock == -1){
+            int errsv = errno;
+            fprintf(stderr,"[E|-Client Not Connected-%s-%d] %s\n", __func__, errsv, strerror(errsv));
         }
+        postConnectRoutine(commSock, clientAddress);
+        eventQueue.push(this->sockfd);
+
+        return true;
     }
     return false;
 }

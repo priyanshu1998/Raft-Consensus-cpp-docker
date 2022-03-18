@@ -5,13 +5,15 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
-
+#include <queue>
 #include <sys/select.h>
 
 class TCPServer{
 protected:
     int sockfd = -1;
     fd_set masterfds{};
+    std::queue<int>eventQueue;
+
 
     virtual void postConnectRoutine(int commSock,const struct sockaddr_in &clientAddress);
     virtual void preCloseRoutine(int commSock);
