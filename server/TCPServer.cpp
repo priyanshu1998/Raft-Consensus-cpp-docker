@@ -83,6 +83,7 @@ void TCPServer::_listenAndAccept() {
     fprintf(stderr,"[I|-Socket in LISTENING state-] can accept new connections.\n"),
 
     FD_SET(this->sockfd, &(this->masterfds));
+    eventQueue.push(this->sockfd);
 
     _serveForever();
 }
