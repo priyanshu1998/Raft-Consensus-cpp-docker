@@ -47,10 +47,9 @@ bool RaftServer::descriptorEvents(fd_set &readfds, int i) {
             write(this->tryConnectPipe[1], IP, strlen(IP));
         }
 
-        eventQueue.push(this->tryConnectPipe[0]);
         return true;
     }
-    return TCPServer::descriptorEvents(readfds);
+    return TCPServer::descriptorEvents(readfds, i);
 }
 
 bool RaftServer::tryConnecting(char *host) {
@@ -72,7 +71,7 @@ bool RaftServer::tryConnecting(char *host) {
     }
 
     char address[ADDRSTRLEN]{};
-    printf("[I| Will try to connect to %s]\n", inetAddressStr(result->ai_addr, result->ai_addrlen,
+    fprintf(stderr, "[I| Will try to connect to %s]\n", inetAddressStr(result->ai_addr, result->ai_addrlen,
                                         address, ADDRSTRLEN));
 
     int sockfd = socket(result->ai_family, result->ai_socktype,

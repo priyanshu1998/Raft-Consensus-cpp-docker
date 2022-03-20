@@ -12,7 +12,7 @@ class TCPServer{
 protected:
     int sockfd = -1;
     fd_set masterfds{};
-    std::queue<int>eventQueue;
+    std::deque<int>eventQueue;
 
 
     virtual void postConnectRoutine(int commSock,const struct sockaddr_in &clientAddress);

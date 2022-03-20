@@ -9,8 +9,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include <string>
 #include "TCPServer.h"
+#include "ServerUtils.h"
 
 //int queueSize = 100;
 
@@ -20,8 +20,11 @@ char* TCPServer::inetAddressStr(const struct sockaddr *addr, socklen_t addrlen,
 
     if(getnameinfo(addr, addrlen, host, NI_MAXSERV,
                    service, NI_MAXSERV, NI_NUMERICHOST|NI_NUMERICSERV) == 0){
+//                   service, NI_MAXSERV, 0) == 0){
         snprintf(addrStr, addrStrLen, "(%s, %s)", host, service);
     }else{
+        int errsv = errno;
+        fprintf(stderr, "[E| could not resolve hostname] %s\n", strerror(errsv));
         snprintf(addrStr, addrStrLen, "(?UNKNOWN?)");
     }
     addrStr[addrStrLen-1] = 0;
@@ -82,8 +85,8 @@ void TCPServer::_listenAndAccept() {
     }
     fprintf(stderr,"[I|-Socket in LISTENING state-] can accept new connections.\n"),
 
-    FD_SET(this->sockfd, &(this->masterfds));
-    eventQueue.push(this->sockfd);
+
+    ServerUtils::addEventDescriptor(this->eventQueue, this->sockfd, this->masterfds);
 
     _serveForever();
 }
@@ -98,9 +101,7 @@ void TCPServer::_serveForever() {
             fprintf(stderr,"[E|-Select Syscall-%s-%d] %s\n", __func__, errsv, strerror(errsv));
         }
 
-        int i = eventQueue.front();
-        eventQueue.pop();
-
+        int i = ServerUtils::nextEventDescriptor(eventQueue);
         if(FD_ISSET(i, &readfds)){
             bool isHandled = descriptorEvents(readfds, i);
 
@@ -112,31 +113,25 @@ void TCPServer::_serveForever() {
                 if (stat != 0) {
                     preCloseRoutine(i);
                     close(i);
-                }else{
-                    eventQueue.push(i);
                 }
             }
-        }else{
-            eventQueue.push(i);
         }
     }
 #pragma clang diagnostic pop
 }
 
-bool TCPServer::descriptorEvents(fd_set &readfds) {
-    if(FD_ISSET(this->sockfd, &readfds)){
+bool TCPServer::descriptorEvents(fd_set &readfds, int i) {
+    if(i == this->sockfd){
         // New connection request
         fprintf(stderr,"[I] New client connected.\n");
         struct sockaddr_in clientAddress{};
         int commSock = _acceptClientWrapper(clientAddress);
-        eventQueue.push(commSock);
 
         if(commSock == -1){
             int errsv = errno;
             fprintf(stderr,"[E|-Client Not Connected-%s-%d] %s\n", __func__, errsv, strerror(errsv));
         }
         postConnectRoutine(commSock, clientAddress);
-        eventQueue.push(this->sockfd);
 
         return true;
     }
@@ -198,7 +193,8 @@ int TCPServer::_handleRequest(int clientSock) {
 }
 
 void TCPServer::postConnectRoutine(int commSock, const struct sockaddr_in &clientAddr) {
-    FD_SET(commSock, &(this->masterfds));
+//    FD_SET(commSock, &(this->masterfds));
+    ServerUtils::addEventDescriptor(this->eventQueue, commSock, this->masterfds);
 }
 
 void TCPServer::preCloseRoutine(int commSock) {
@@ -221,6 +217,11 @@ void TCPServer::preCloseRoutine(int commSock) {
         fprintf(stderr, "[I| Client %s teminated.\n", inetAddressStr( (struct sockaddr*)&addrinfo, addrsize, terminatingClient, 1024));
     }
 
+
+    printf("Socket removed from masterfds.\n");
+    /** popEventDescriptor *****************/
     FD_CLR(commSock, &(this->masterfds));
+    this->eventQueue.pop_back();
+    /**************************************/
 }
 

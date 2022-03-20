@@ -76,8 +76,7 @@ public:
              fprintf(stderr,"[E| %d] Errno: %d, pipe error]%s\n", this->nodeId, errsv, std::strerror(errsv));
          }
 
-         FD_SET(this->tryConnectPipe[0], &(this->masterfds));
-         eventQueue.push(this->tryConnectPipe[0]);
+         ServerUtils::addEventDescriptor(this->eventQueue, this->tryConnectPipe[0], this->masterfds);
     }
 
     bool descriptorEvents(fd_set &readfds, int i) override;
