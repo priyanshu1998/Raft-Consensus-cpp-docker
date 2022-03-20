@@ -3,6 +3,26 @@
 //
 
 #include "ServerUtils.h"
+#include <netdb.h>
+#include <sys/socket.h>
+
+
+char* ServerUtils::inetAddressStr(struct sockaddr *addr, socklen_t addrlen,
+                                char *addrStr, int addrStrLen){
+    char host[NI_MAXHOST], service[NI_MAXSERV];
+
+    if(getnameinfo(addr, addrlen, host, NI_MAXHOST,
+                   service, NI_MAXSERV, NI_NUMERICHOST|NI_NUMERICSERV) == 0){
+//                   service, NI_MAXSERV, 0) == 0){
+        snprintf(addrStr, addrStrLen, "(%s, %s)", host, service);
+    }else{
+        int errsv = errno;
+        fprintf(stderr, "[E| could not resolve hostname] %s\n", strerror(errsv));
+        snprintf(addrStr, addrStrLen, "(?UNKNOWN?)");
+    }
+    addrStr[addrStrLen-1] = 0;
+    return addrStr;
+}
 
 bool ServerUtils::readIP(int fd, char *IP) {
     char c = 0;
@@ -23,36 +43,6 @@ bool ServerUtils::readIP(int fd, char *IP) {
     return true;
 }
 
-bool ServerUtils::insertAcceptSock(std::map<std::string, Conn> &peerEndpoints, const char *host, int sockfd){
-    auto it = peerEndpoints.find(host);
-    if(it != peerEndpoints.end()){
-        it->second.acceptSock = sockfd;
-
-        // the fact that it was found implies .connectSock exist
-        // therefore both the listening sockets have established connection.
-
-        return true;
-    }else{
-        peerEndpoints[host] = ServerUtils::Conn{};
-        peerEndpoints[host].acceptSock = sockfd;
-        return false;
-    }
-}
-
-bool ServerUtils::insertConnectSock(std::map<std::string, Conn> &peerEndpoints, const char *host, int sockfd) {
-    auto it = peerEndpoints.find(host);
-    if(it != peerEndpoints.end()){
-        it->second.connectSock = sockfd;
-
-        // the fact that it was found implies .acceptSock exist
-        // therefore both the listening sockets have established connection.
-        return true;
-    }else{
-        peerEndpoints[host] = ServerUtils::Conn{};
-        peerEndpoints[host].connectSock = sockfd;
-        return false;
-    }
-}
 
 int ServerUtils::nextEventDescriptor(std::deque<int> &eventQueue) {
     int i = eventQueue.front();
@@ -65,4 +55,71 @@ int ServerUtils::nextEventDescriptor(std::deque<int> &eventQueue) {
 int ServerUtils::addEventDescriptor(std::deque<int> &eventQueue, int fd, fd_set &readfds) {
     eventQueue.push_back(fd);
     FD_SET(fd, &readfds);
+    return fd;
 }
+
+bool ServerUtils::addServerToListOfKnowHost(const char *hostname) {
+    struct addrinfo hints{
+            .ai_family = AF_INET,
+            .ai_socktype = SOCK_STREAM,
+    };
+
+    struct addrinfo *result = nullptr;
+    int stat = getaddrinfo(hostname, ServerUtils::PORT, &hints, &result);
+    if(stat != 0){
+        fprintf(stderr,"[E|-getaddrinfo %d] %s\n", stat, gai_strerror(stat));
+//        _exit(EXIT_FAILURE);
+        return false;
+    }
+
+    while(result != nullptr && result->ai_family != AF_INET){
+        result = result->ai_next;
+    }
+
+
+    char hostIP[NI_MAXHOST];
+    if(getnameinfo(result->ai_addr, result->ai_addrlen, hostIP, NI_MAXHOST,
+                   nullptr, NI_MAXSERV, NI_NUMERICHOST) == 0){
+//                   nullptr, 0, NI_NOFQDN) == 0){
+        fprintf(stderr,"[I] in list %s\n", hostIP);
+    }else{
+        fprintf(stderr, "ERROR\n");
+    }
+
+    ServerUtils::IP2Hostname[hostIP] = hostname;
+    return true;
+}
+
+bool ServerUtils::isPeerPresent(int peer_fd) {
+    sockaddr_in addrInfo{};
+    socklen_t len{};
+
+    if(getpeername(peer_fd, (struct sockaddr*) &addrInfo, &len) == -1){
+        int errsv = errno;
+        if(errsv == 104){
+            fprintf(stderr, "[I | client terminated before receiving response]\n");
+            return false;
+        }
+
+        fprintf(stderr, "[E | isPeerPresent some other error occurred] %s\n", strerror(errsv));
+        return false;
+    }
+    return true;
+}
+
+bool ServerUtils::broadcast(std::map<std::string, int> &connectedPeer, void *payload, int payloadSize) {
+    bool any_issue_occured = false;
+
+    for(const auto& IP_fd_pair: connectedPeer){
+        std::string IP{};
+        int fd{};
+
+        std::tie(IP, fd) = IP_fd_pair;
+        send(fd, payload, payloadSize, 0);
+
+        //TODO: in progress check for situations where the client server disconnects.
+    }
+
+    return any_issue_occured;
+}
+

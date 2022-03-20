@@ -14,22 +14,6 @@
 
 //int queueSize = 100;
 
-char* TCPServer::inetAddressStr(const struct sockaddr *addr, socklen_t addrlen,
-                                char *addrStr, int addrStrLen){
-    char host[NI_MAXHOST], service[NI_MAXSERV];
-
-    if(getnameinfo(addr, addrlen, host, NI_MAXSERV,
-                   service, NI_MAXSERV, NI_NUMERICHOST|NI_NUMERICSERV) == 0){
-//                   service, NI_MAXSERV, 0) == 0){
-        snprintf(addrStr, addrStrLen, "(%s, %s)", host, service);
-    }else{
-        int errsv = errno;
-        fprintf(stderr, "[E| could not resolve hostname] %s\n", strerror(errsv));
-        snprintf(addrStr, addrStrLen, "(?UNKNOWN?)");
-    }
-    addrStr[addrStrLen-1] = 0;
-    return addrStr;
-}
 
 void TCPServer::_createAndBind(const char *hostname, const char* port) {
     struct addrinfo hints{
@@ -67,7 +51,7 @@ void TCPServer::_createAndBind(const char *hostname, const char* port) {
 
         char addrStr[1024]{};
         fprintf(stderr,"[I|-Socket Created and Binded] %s\n",
-               inetAddressStr(bind_address->ai_addr, bind_address->ai_addrlen, addrStr, 1024));
+               ServerUtils::inetAddressStr(bind_address->ai_addr, bind_address->ai_addrlen, addrStr, 1024));
 
     }
     freeaddrinfo(bind_address);
@@ -150,7 +134,7 @@ int TCPServer::_acceptClientWrapper(struct sockaddr_in &clientAddress) const {
 
     char addrStr[1024]{};
     fprintf(stderr,"[I]-accepted connection from %s on fd: %d\n",
-           inetAddressStr((struct sockaddr*)&clientAddress, sizeof(clientAddress), addrStr, 1024), clientSock);
+           ServerUtils::inetAddressStr((struct sockaddr*)&clientAddress, sizeof(clientAddress), addrStr, 1024), clientSock);
 
     return clientSock;
 }
@@ -184,7 +168,7 @@ int TCPServer::_handleRequest(int clientSock) {
     }
 
 
-    if(send(clientSock, send_buf, 1023, 0) == -1){
+    if(ServerUtils::isPeerPresent(clientSock) && send(clientSock, send_buf, 1023, 0) == -1){
         int errsv = errno;
         fprintf(stderr,"[E-Send error from-%s-%d] %s\n", __func__, errsv, std::strerror(errsv));
         return errsv;
@@ -212,12 +196,13 @@ void TCPServer::preCloseRoutine(int commSock) {
         }else {
             fprintf(stderr, "[E| unable to get sockname] %s\n", strerror(errsv));
         }
+        goto release_fd;
     }else{
         char terminatingClient[1024]{};
-        fprintf(stderr, "[I| Client %s teminated.\n", inetAddressStr( (struct sockaddr*)&addrinfo, addrsize, terminatingClient, 1024));
+        fprintf(stderr, "[I| Client %s teminated.\n", ServerUtils::inetAddressStr( (struct sockaddr*)&addrinfo, addrsize, terminatingClient, 1024));
     }
 
-
+    release_fd:
     printf("Socket removed from masterfds.\n");
     /** popEventDescriptor *****************/
     FD_CLR(commSock, &(this->masterfds));

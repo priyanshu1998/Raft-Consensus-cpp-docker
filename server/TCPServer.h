@@ -37,9 +37,6 @@ public:
 
     void actAsServer();
 
-    static char *inetAddressStr(const struct sockaddr *addr, socklen_t addrlen,
-                         char *addrStr, int addrStrLen);
-
 
     void _serveForever();
 

@@ -18,14 +18,18 @@
 #ifndef RAFT_CPP_RAFTSERVER_H
 #define RAFT_CPP_RAFTSERVER_H
 #include "TCPServer.h"
+#include "ServerUtils.h"
+
 #include <cstdio>
 
 #include <vector>
 #include <cstring>
 #include <string>
 #include <unistd.h>
+#include <map>
+#include <string>
+#include <queue>
 
-#include "ServerUtils.h"
 constexpr int TOT_SERVER = 5;
 
 struct RaftPayload{
@@ -62,6 +66,10 @@ class RaftServer:  public TCPServer{
 private:
     int tryConnectPipe[2]{};
     int nodeId;
+    int totalEstablishedConn;
+
+    std::map<std::string, int> connectedPeer;
+    // this maintains the mapping of node's IP to fd
 
     State s;
     void postConnectRoutine(int commSock,const struct sockaddr_in &clientAddress) final;
@@ -69,7 +77,7 @@ private:
 
 public:
     RaftServer(int nodeId, const char *hostname, const char *port) :
-            TCPServer(hostname, port), nodeId(nodeId), s(Initializing)
+            TCPServer(hostname, port), nodeId(nodeId), s(Initializing), totalEstablishedConn(0)
     {
          if(pipe(this->tryConnectPipe) == -1){
              int errsv = errno;
@@ -81,8 +89,9 @@ public:
 
     bool descriptorEvents(fd_set &readfds, int i) override;
     bool tryConnecting(char *host);
-    void lazyConnect(char *host);
+    void lazyConnect(const char *host);
 
+    static bool isServerRequest(int fd);
 
 };
 
