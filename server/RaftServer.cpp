@@ -2,6 +2,7 @@
 #include "RaftServer.h"
 #include "ServerUtils.h"
 #include <unistd.h>
+#include <cstdio>
 
 // https://isocpp.org/wiki/faq/strange-inheritance#calling-virtuals-from-base
 
@@ -21,49 +22,40 @@ static void append_delimiter(char *s){
 
 void RaftServer::postConnectRoutine(int commSock, const sockaddr_in &clientAddress) {
     TCPServer::postConnectRoutine(commSock, clientAddress);
-    char hostname[NI_MAXHOST]{};
 
-    if(getnameinfo((struct sockaddr*)&clientAddress, sizeof (clientAddress), hostname, NI_MAXHOST,
-                nullptr, 0, NI_NAMEREQD) == 0){
-//        bool isConnectedBothWays = ServerUtils::insertAcceptSock(this->peerEndpoints, hostname, commSock);
-//        if(isConnectedBothWays && this->s == Initializing){
-//            fprintf(stderr, "[I] Connected Both Ways.\n");
-//            this->totalEstablishedConn++;
-//            if(totalEstablishedConn > ServerUtils::TOT_SERVERS/2){
-//                this->s = Follower;
-//            }
-//        }else{
-//            fprintf(stderr, "[I] connected as client only.\n");
-//        }
-    }else{
+    char IP[NI_MAXHOST]{};
+    if(getnameinfo((struct sockaddr*)&clientAddress, sizeof (clientAddress), IP, NI_MAXHOST,
+                nullptr, 0, NI_NUMERICHOST) != 0){
         int errsv = errno;
         fprintf(stderr, "[E|didnt get hostname in post connect stage] %s\n", strerror(errsv));
+    }
+
+    //Add to monitoredPeer if it's a server.
+    if(ServerUtils::IP2Hostname.find(IP) != ServerUtils::IP2Hostname.end()){
+        this->monitoredPeer[commSock] = IP;
     }
 }
 
 void RaftServer::preCloseRoutine(int commSock){
     printf("RAFT SERVER Routine called\n");
+    if(RaftServer::isServerRequest(commSock)){
+        std::string IP = this->monitoredPeer[commSock];
+
+        this->monitoredPeer.erase(commSock);
+        this->connectedPeer.erase(IP);
+        fprintf(stderr, "IP TO CONNECT %s| %s\n", IP.c_str(), ServerUtils::IP2Hostname[IP].c_str());
+        TCPServer::preCloseRoutine(commSock);
+        lazyConnect(ServerUtils::IP2Hostname[IP].c_str());
+        return;
+    }
     TCPServer::preCloseRoutine(commSock);
 }
 
 bool RaftServer::descriptorEvents(fd_set &readfds, int i) {
-    // New host/IP to connect
-    if (i == this->tryConnectPipe[0]) {
-        char IP[1024]{};
-        ServerUtils::readIP(this->tryConnectPipe[0], IP);
-        bool isConnectionSuccessful = tryConnecting(IP);
-
-        if(!isConnectionSuccessful){
-            append_delimiter(IP);
-            write(this->tryConnectPipe[1], IP, strlen(IP));
-        }
-
-        return true;
-    }
     return TCPServer::descriptorEvents(readfds, i);
 }
 
-bool RaftServer::tryConnecting(char *host) {
+bool RaftServer::tryConnecting(const char *host) {
     struct addrinfo hints{
         .ai_family = AF_INET,
         .ai_socktype = SOCK_STREAM,
@@ -122,29 +114,56 @@ bool RaftServer::tryConnecting(char *host) {
 }
 
 void RaftServer::lazyConnect(const char *host) {
-    char t_host[1024]{};
-    strcpy(t_host, host);
-    append_delimiter(t_host);
-
-    write(this->tryConnectPipe[1], t_host, strlen(t_host));
+    this->toConnect.emplace_back(host);
 }
 
 bool RaftServer::isServerRequest(int fd) {
-    // If bound to Port "3000" ServerUtils::PORT then the request is from a server.
-    struct sockaddr_in addr{};
-    socklen_t socklen = sizeof (struct sockaddr_in);
-    if(getsockname(fd, (struct sockaddr*)&addr, &socklen) == -1){
-        int errsv = errno;
-        fprintf(stderr, "[E | failed to the sockaddr_in ] %s\n", strerror(errsv));
-        return false;
+    return this->monitoredPeer.find(fd) != this->monitoredPeer.end();
+}
+
+int RaftServer::_handleRequest(int clientSock) {
+    if(RaftServer::isServerRequest(clientSock)){
+        fprintf(stderr, "[I] request from server\n");
+        char recv_buf[1024]{};
+        if(recv(clientSock, recv_buf, 1023, 0) <= 0){
+            int errsv = errno;
+            if(errsv == 104){
+                // Transport endpoint is not connected
+                return -1;
+            }else if(errsv == 0){
+                // Success with zero length payload.
+                return -1;
+            }
+
+            fprintf(stderr,"[E-Recv error from-%s-%d] %s\n", __func__, errsv, std::strerror(errsv));
+            return errsv;
+        }
+        fprintf(stderr,"GOT from server %s\n", recv_buf);
+        return 0;
     }
 
-    char service[NI_MAXSERV]{};
-    if(getnameinfo((struct sockaddr*)&addr, socklen, nullptr, 0, service, NI_MAXSERV, NI_NUMERICSERV) == -1){
-        int errsv = errno;
-        fprintf(stderr, "[E | unable to obtain the service port] %s\n", strerror(errsv));
-        return false;
-    }
+    return TCPServer::_handleRequest(clientSock);
+}
 
-    return strcmp(service, ServerUtils::PORT) == 0;
+void RaftServer::timeoutEvent() {
+    //try to connect to other servers if any========
+    if(!this->toConnect.empty()){
+        size_t size = toConnect.size();
+
+        for(int i=0; i<size; i++){
+            auto hostname = toConnect.front();
+            toConnect.pop_front();
+            bool isConnected = tryConnecting(hostname.c_str());
+
+            if(!isConnected){
+                toConnect.push_back(hostname);
+            }
+        }
+    }
+    //end of routine=================================
+
+
+    char msg[] = "Hello!!!\n";
+    TCPServer::timeoutEvent();
+    ServerUtils::broadcast(this->connectedPeer, msg, strlen(msg));
 }

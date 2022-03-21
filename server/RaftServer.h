@@ -64,34 +64,32 @@ enum State{
 
 class RaftServer:  public TCPServer{
 private:
-    int tryConnectPipe[2]{};
     int nodeId;
     int totalEstablishedConn;
 
     std::map<std::string, int> connectedPeer;
-    // this maintains the mapping of node's IP to fd
+    std::map<int, std::string> monitoredPeer;
+
+
+    std::deque<std::string> toConnect;
 
     State s;
     void postConnectRoutine(int commSock,const struct sockaddr_in &clientAddress) final;
     void preCloseRoutine(int commSock) final ;
+    int _handleRequest(int clientSock) override ;
+    void timeoutEvent() override;
+
 
 public:
     RaftServer(int nodeId, const char *hostname, const char *port) :
             TCPServer(hostname, port), nodeId(nodeId), s(Initializing), totalEstablishedConn(0)
-    {
-         if(pipe(this->tryConnectPipe) == -1){
-             int errsv = errno;
-             fprintf(stderr,"[E| %d] Errno: %d, pipe error]%s\n", this->nodeId, errsv, std::strerror(errsv));
-         }
-
-         ServerUtils::addEventDescriptor(this->eventQueue, this->tryConnectPipe[0], this->masterfds);
-    }
+    {}
 
     bool descriptorEvents(fd_set &readfds, int i) override;
-    bool tryConnecting(char *host);
+    bool tryConnecting(const char *host);
     void lazyConnect(const char *host);
 
-    static bool isServerRequest(int fd);
+    bool isServerRequest(int fd);
 
 };
 

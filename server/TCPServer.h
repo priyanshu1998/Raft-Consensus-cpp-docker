@@ -7,6 +7,7 @@
 #include <netdb.h>
 #include <queue>
 #include <sys/select.h>
+#include <cstdio>
 
 class TCPServer{
 protected:
@@ -17,10 +18,12 @@ protected:
 
     virtual void postConnectRoutine(int commSock,const struct sockaddr_in &clientAddress);
     virtual void preCloseRoutine(int commSock);
+    virtual int _handleRequest(int clientSock);
+    virtual void timeoutEvent(){fprintf(stderr,"[I] Timeout occurred.\n");};
+
 private:
     void _createAndBind(const char *hostname, const char *port) ;
     void _listenAndAccept();
-    static int _handleRequest(int clientSock) ;
     int _acceptClientWrapper(struct sockaddr_in &clientAddress) const;
 
 public:

@@ -96,30 +96,32 @@ bool ServerUtils::isPeerPresent(int peer_fd) {
 
     if(getpeername(peer_fd, (struct sockaddr*) &addrInfo, &len) == -1){
         int errsv = errno;
-        if(errsv == 104){
+        if(errsv == 107){
             fprintf(stderr, "[I | client terminated before receiving response]\n");
             return false;
         }
 
-        fprintf(stderr, "[E | isPeerPresent some other error occurred] %s\n", strerror(errsv));
+        fprintf(stderr, "[E | isPeerPresent some other error occurred] <%d> %s\n", errsv, strerror(errsv));
         return false;
     }
     return true;
 }
 
-bool ServerUtils::broadcast(std::map<std::string, int> &connectedPeer, void *payload, int payloadSize) {
-    bool any_issue_occured = false;
+bool ServerUtils::broadcast(std::map<std::string, int> &connectedPeer, void *payload, size_t payloadSize) {
+    bool delivered_to_all = true;
 
     for(const auto& IP_fd_pair: connectedPeer){
         std::string IP{};
         int fd{};
 
         std::tie(IP, fd) = IP_fd_pair;
-        send(fd, payload, payloadSize, 0);
+        if(isPeerPresent(fd)){
+            send(fd, payload, payloadSize, 0);
+        }
 
         //TODO: in progress check for situations where the client server disconnects.
     }
 
-    return any_issue_occured;
+    return delivered_to_all;
 }
 

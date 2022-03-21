@@ -76,13 +76,25 @@ void TCPServer::_listenAndAccept() {
 }
 
 void TCPServer::_serveForever() {
+    struct timeval timeout_interval{.tv_usec = 5000000};
+    auto &interval = timeout_interval.tv_usec;
+
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "EndlessLoop"
     for(;;){
         fd_set readfds = this->masterfds;
-        if(select(FD_SETSIZE, &readfds, nullptr, nullptr, nullptr) < 0){
+        if(interval == 0){interval = 5000000;}
+
+        if(select(FD_SETSIZE, &readfds, nullptr, nullptr, &timeout_interval) < 0){
             int errsv = errno;
             fprintf(stderr,"[E|-Select Syscall-%s-%d] %s\n", __func__, errsv, strerror(errsv));
+        }
+
+        if(interval == 0){
+            fprintf(stderr,"Timeout occurred\n");
+
+            timeoutEvent();
+            continue;
         }
 
         int i = ServerUtils::nextEventDescriptor(eventQueue);
@@ -166,9 +178,10 @@ int TCPServer::_handleRequest(int clientSock) {
     for(int i=0; i< std::strlen(recv_buf); i++){
         send_buf[i] = toupper(recv_buf[i]);
     }
+    fprintf(stderr, "[INFO] %s\n", send_buf);
 
 
-    if(ServerUtils::isPeerPresent(clientSock) && send(clientSock, send_buf, 1023, 0) == -1){
+    if(!ServerUtils::isPeerPresent(clientSock) || send(clientSock, send_buf, 1023, 0) == -1){
         int errsv = errno;
         fprintf(stderr,"[E-Send error from-%s-%d] %s\n", __func__, errsv, std::strerror(errsv));
         return errsv;
@@ -177,7 +190,6 @@ int TCPServer::_handleRequest(int clientSock) {
 }
 
 void TCPServer::postConnectRoutine(int commSock, const struct sockaddr_in &clientAddr) {
-//    FD_SET(commSock, &(this->masterfds));
     ServerUtils::addEventDescriptor(this->eventQueue, commSock, this->masterfds);
 }
 
@@ -199,7 +211,7 @@ void TCPServer::preCloseRoutine(int commSock) {
         goto release_fd;
     }else{
         char terminatingClient[1024]{};
-        fprintf(stderr, "[I| Client %s teminated.\n", ServerUtils::inetAddressStr( (struct sockaddr*)&addrinfo, addrsize, terminatingClient, 1024));
+        fprintf(stderr, "[I| Client %s terminated.\n", ServerUtils::inetAddressStr( (struct sockaddr*)&addrinfo, addrsize, terminatingClient, 1024));
     }
 
     release_fd:

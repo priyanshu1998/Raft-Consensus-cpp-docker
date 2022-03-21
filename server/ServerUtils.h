@@ -21,7 +21,7 @@ namespace ServerUtils{
     bool readIP(int fd ,char *IP);
 
     static std::map<std::string , std::string > IP2Hostname;
-    bool broadcast(std::map<std::string, int> &connectedPeer, void *payload, int payloadSize);
+    bool broadcast(std::map<std::string, int> &connectedPeer, void *payload, size_t payloadSize);
 
     int nextEventDescriptor(std::deque<int>&eventQueue);
 
